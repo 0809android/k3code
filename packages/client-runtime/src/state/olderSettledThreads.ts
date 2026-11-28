@@ -3,12 +3,14 @@ import {
   isOlderSettledThreadShell,
   ORCHESTRATION_V2_WS_METHODS,
   type EnvironmentId,
+  type OrchestrationV2GetOlderSettledThreadsInput,
   type OrchestrationV2OlderSettledCursor,
   type OrchestrationV2OlderSettledThreadsPage,
   type OrchestrationV2SearchThreadsInput,
   type OrchestrationV2ThreadFamily,
   type OrchestrationV2ThreadShell,
   type ProjectId,
+  type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -18,9 +20,11 @@ import { AsyncResult, Atom, type AtomRegistry } from "effect/reactivity";
 
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import { request } from "../rpc/client.ts";
+import { type EnvironmentThreadShell, scopeThreadShell } from "./models.ts";
 import { createEnvironmentQueryAtomFamily, selectEnvironmentQueryData } from "./runtime.ts";
 import type { EnvironmentShellState } from "./shell.ts";
 import { threadFamilyRead } from "./threadFamilies.ts";
+import { effectiveSnoozed } from "./threadSettled.ts";
 
 // Rows per page of older settled threads: one "Show more" step of the Settled shelf.
 const OLDER_SETTLED_PAGE_SIZE = 25;
@@ -484,4 +488,108 @@ export function createOlderSettledThreadAtoms<R, ER, E>(
     searchAtom: (environmentId: EnvironmentId, search: OrchestrationV2SearchThreadsInput) =>
       searchAtom(JSON.stringify([environmentId, search])),
   };
+}
+
+// サーバーが返せる 1 ページの最大件数。
+const BULK_PAGE_SIZE = 50;
+
+/**
+ * 対象範囲の古い対応済みスレッドをすべて読む。対応済みの区分をまとめて操作するためのもの。
+ * 区分に並ばないもの（スヌーズ中、タグで隠したもの、別のスレッドの下に出るタスク）は除く。
+ * 途中の読み込みに失敗したら null を返し、一部だけを操作しないようにする。
+ */
+export async function readAllOlderSettledThreads(input: {
+  readonly scopes: ReadonlyArray<OlderSettledScope>;
+  /** 対応済みを区切った日時。すべて手元にある環境では null。 */
+  readonly cutOf: (environmentId: EnvironmentId) => string | null;
+  readonly readPage: (
+    environmentId: EnvironmentId,
+    page: OrchestrationV2GetOlderSettledThreadsInput,
+  ) => Promise<OrchestrationV2OlderSettledThreadsPage | null>;
+  readonly isLoaded: (ref: ScopedThreadRef) => boolean;
+  readonly hiddenTagsOf: (environmentId: EnvironmentId) => ReadonlyArray<string> | null;
+  /** どれかの環境がタグを隠しているか。隠しているあいだは、親が手元にないタスクも一覧に出ない。 */
+  readonly hidingAnywhere: boolean;
+  readonly now: string;
+}): Promise<ReadonlyArray<EnvironmentThreadShell> | null> {
+  const older: EnvironmentThreadShell[] = [];
+  for (const { environmentId, projectIds } of input.scopes) {
+    const cut = input.cutOf(environmentId);
+    if (cut === null) continue;
+    const hiddenTags = input.hiddenTagsOf(environmentId);
+    let before: OrchestrationV2GetOlderSettledThreadsInput["before"] = { settledAt: cut };
+    for (;;) {
+      const page: OrchestrationV2OlderSettledThreadsPage | null = await input.readPage(
+        environmentId,
+        { before, limit: BULK_PAGE_SIZE, ...(projectIds === null ? {} : { projectIds }) },
+      );
+      if (page === null) return null;
+      for (const row of page.threads) {
+        // サブエージェントやワークフローの工程は、一覧に出ないので対象にしない。
+        if (!isListedThreadLineage(row.lineage)) continue;
+        if (hiddenTags?.some((tag) => row.tags?.includes(tag))) continue;
+        if (
+          row.delegatedFrom !== undefined &&
+          (input.hidingAnywhere || input.isLoaded(row.delegatedFrom))
+        ) {
+          continue;
+        }
+        const thread = scopeThreadShell(environmentId, row);
+        if (!effectiveSnoozed(thread, { now: input.now })) older.push(thread);
+      }
+      const last = page.threads.at(-1);
+      if (page.threads.length < BULK_PAGE_SIZE || last?.settledAt == null) break;
+      before = { settledAt: DateTime.formatIso(last.settledAt), threadId: last.id };
+    }
+  }
+  return older;
+}
+
+/**
+ * 一括操作の対象。手元の対応済みと読み込んだ古い分を、重複なく合わせる。手元に行があるものは
+ * その最新の状態で判定する。手元にないものは、読み込んだ古い分にある場合だけ対象にする
+ * （ほかの端末でアーカイブ・削除されたものは、そこに出ない）。
+ */
+export function settledShelfTargets(input: {
+  readonly loaded: ReadonlyArray<ScopedThreadRef>;
+  readonly older: ReadonlyArray<EnvironmentThreadShell>;
+  /** 操作を始めた時点の範囲。途中で絞り込みが変わっても、この外には広げない。 */
+  readonly scopes: ReadonlyArray<OlderSettledScope>;
+  readonly currentOf: (ref: ScopedThreadRef) => EnvironmentThreadShell | null;
+  readonly now: string;
+}): ReadonlyArray<EnvironmentThreadShell> {
+  const keyOf = (ref: ScopedThreadRef): string => `${ref.environmentId}:${ref.threadId}`;
+  const older = new Map(
+    input.older.map((thread) => [
+      keyOf({ environmentId: thread.environmentId, threadId: thread.id }),
+      thread,
+    ]),
+  );
+  const refs = new Map<string, ScopedThreadRef>(
+    [
+      ...input.loaded,
+      ...input.older.map((thread) => ({
+        environmentId: thread.environmentId,
+        threadId: thread.id,
+      })),
+    ].map((ref) => [keyOf(ref), ref] as const),
+  );
+  const inScope = (thread: EnvironmentThreadShell) =>
+    input.scopes.some(
+      (scope) =>
+        scope.environmentId === thread.environmentId &&
+        (scope.projectIds === null || scope.projectIds.includes(thread.projectId)),
+    );
+  return [...refs].flatMap(([key, ref]) => {
+    const current = input.currentOf(ref);
+    const thread =
+      current === null
+        ? older.get(key)
+        : current.settledOverride === "settled" &&
+            current.archivedAt === null &&
+            !effectiveSnoozed(current, { now: input.now })
+          ? current
+          : undefined;
+    return thread !== undefined && inScope(thread) ? [thread] : [];
+  });
 }

@@ -218,10 +218,20 @@ export function WorkingSectionSettings() {
   const preferences = useAtomValue(mobilePreferencesAtom);
   const workingShelfEnabled =
     AsyncResult.isSuccess(preferences) && preferences.value.workingShelfEnabled !== false;
+  const sectionColorsEnabled =
+    AsyncResult.isSuccess(preferences) && preferences.value.sectionColorsEnabled !== false;
 
   return (
     <View className="gap-3">
       <SettingsSection title={gt("Sidebar")}>
+        <SettingsSwitchRow
+          icon="paintbrush"
+          label={gt("Section colors")}
+          value={sectionColorsEnabled}
+          onValueChange={(value) => {
+            void savePreferences({ sectionColorsEnabled: value });
+          }}
+        />
         <SettingsSwitchRow
           icon="bolt.circle"
           label={gt("Working section")}

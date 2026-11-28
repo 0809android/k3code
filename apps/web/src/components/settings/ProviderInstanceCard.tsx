@@ -63,6 +63,7 @@ import {
   reconcileRowsDraft,
   seedRowsDraft,
 } from "./ProviderSettingsForm";
+import { apiServiceModelSlug, readApiService, refreshedApiServiceConfig } from "./apiServices";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
@@ -900,7 +901,13 @@ export function ProviderInstanceCard({
       const nextConfig = nextConfigBlobWithValue(
         instance.config,
         "customModels",
-        next.map(toCustomModelSetting),
+        next
+          .map((entry) =>
+            readApiService(instance.config)
+              ? { ...entry, slug: apiServiceModelSlug(entry.slug) }
+              : entry,
+          )
+          .map(toCustomModelSetting),
       );
       const { config: _omit, ...rest } = instance;
       return onUpdate({ ...rest, config: nextConfig } as ProviderInstanceConfig);
@@ -938,6 +945,7 @@ export function ProviderInstanceCard({
     );
   };
 
+  const apiService = readApiService(instance.config);
   const updateConfig = (nextConfig: Record<string, unknown> | undefined) => {
     const { config: _omit, ...rest } = instance;
     onUpdate(
@@ -1336,7 +1344,14 @@ export function ProviderInstanceCard({
       idPrefix={`provider-instance-${instanceId}`}
       variant="settings"
       onChange={updateConfig}
-      managed={instanceLocks && { keys: instanceLocks.configKeys, reason: instanceLocks.reason }}
+      managed={
+        readApiService(instance.config)
+          ? {
+              keys: new Set([...(instanceLocks?.configKeys ?? []), "serverUrl", "serverPassword"]),
+              reason: instanceLocks?.reason ?? gt("API services start their own OpenCode server."),
+            }
+          : instanceLocks && { keys: instanceLocks.configKeys, reason: instanceLocks.reason }
+      }
       environmentId={environmentId}
     />
   ) : (
@@ -1360,6 +1375,25 @@ export function ProviderInstanceCard({
     <>
       <SettingsSection title={displayName} icon={titleIconNode} headerAction={editorHeaderAction}>
         <SettingsRow title={gt("Status")} status={statusContent} />
+        {apiService ? (
+          <SettingsRow
+            title={gt("API service")}
+            description={apiService.baseUrl}
+            control={
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={readOnly}
+                onClick={() => {
+                  const next = refreshedApiServiceConfig(instance.config);
+                  if (next) updateConfig(next);
+                }}
+              >
+                <T>Update model list</T>
+              </Button>
+            }
+          />
+        ) : null}
         <SettingsRow
           title={gt("Display name")}
           control={

@@ -13,6 +13,7 @@ export function useThreadListV2ShelfPreferences() {
   const settledShelfExpanded =
     loaded && preferencesResult.value.threadListSettledShelfExpanded === true;
   const workingShelfEnabled = loaded && preferencesResult.value.workingShelfEnabled !== false;
+  const sectionColorsEnabled = loaded && preferencesResult.value.sectionColorsEnabled !== false;
   const workingShelfExpanded =
     loaded && preferencesResult.value.threadListWorkingShelfExpanded === true;
 
@@ -42,12 +43,18 @@ export function useThreadListV2ShelfPreferences() {
     });
   };
 
+  const showWorkingSection = () => {
+    void savePreferences({ workingShelfEnabled: true });
+  };
+
   return {
+    showWorkingSection,
     loaded,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
+    sectionColorsEnabled,
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,

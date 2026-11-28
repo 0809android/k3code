@@ -407,9 +407,32 @@ export function useThreadActions() {
     return result;
   };
 
-  const archiveThread = async (target: ScopedThreadRef, opts: { onArchived?: () => void } = {}) => {
+  const archiveThread = async (
+    target: ScopedThreadRef,
+    opts: { onArchived?: () => void; allowUnloaded?: boolean } = {},
+  ) => {
     const resolved = resolveThreadTarget(target);
-    if (!resolved) return AsyncResult.success(undefined);
+    if (!resolved) {
+      // 古い対応済みスレッドは手元にないが、一括操作ではアーカイブする。
+      if (!opts.allowUnloaded) return AsyncResult.success(undefined);
+      const action = ThreadUndo.begin("archive", scopedThreadKey(target));
+      const result = await archiveThreadMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId },
+      });
+      if (result._tag === "Failure") {
+        action.finish();
+        return result;
+      }
+      refreshArchivedThreadsForEnvironment(target.environmentId);
+      showThreadUndoNotice({
+        action: "Archived",
+        claim: action,
+        undo: () => unarchiveThread(target),
+        failureTitle: m(msg("Failed to undo archive")),
+      });
+      return result;
+    }
     const { thread, threadRef } = resolved;
     if (!threadRuntimeCanArchive(thread.runtime)) {
       return AsyncResult.failure(
@@ -465,7 +488,7 @@ export function useThreadActions() {
 
   const deleteThread = async (
     target: ScopedThreadRef,
-    opts: { deletedThreadKeys?: ReadonlySet<string> } = {},
+    opts: { deletedThreadKeys?: ReadonlySet<string>; keepWorktree?: boolean } = {},
   ) => {
     const permissionFailure = threadOperationFailure(target);
     if (permissionFailure) return permissionFailure;
@@ -540,10 +563,10 @@ export function useThreadActions() {
     const environmentConfig = appAtomRegistry
       .get(environmentServerConfigsAtom)
       .get(threadRef.environmentId);
-    let orphanedWorktreePath = getOrphanedWorktreePathForThread(
-      survivingThreads,
-      threadRef.threadId,
-    );
+    // 一括削除では 1 件ごとに聞かず、ここではワークツリーを残す。
+    let orphanedWorktreePath = opts.keepWorktree
+      ? null
+      : getOrphanedWorktreePathForThread(survivingThreads, threadRef.threadId);
     // A shell that leaves idle subagent children out cannot prove nobody else uses the worktree,
     // so the server's list decides. A failed read keeps the worktree.
     if (orphanedWorktreePath !== null && environmentConfig?.shellThreadFamilies === true) {

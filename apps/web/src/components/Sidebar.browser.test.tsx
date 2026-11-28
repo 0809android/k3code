@@ -24,7 +24,13 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
-import { useProjects, useServerConfigs, useQuietThreadShells } from "../state/entities";
+import {
+  readThreadShell,
+  useProjects,
+  useServerConfigs,
+  useQuietThreadShells,
+} from "../state/entities";
+import { useConnectedEnvironmentIds } from "../state/environments";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -45,6 +51,7 @@ vi.mock("../hooks/useNowMinute", { spy: true });
 vi.mock("../hooks/useThreadRouteTarget", { spy: true });
 vi.mock("./sidebar/SidebarThreadRow", { spy: true });
 vi.mock("../state/session", { spy: true });
+vi.mock("../state/environments", { spy: true });
 vi.mock("../state/use-orchestration-command", { spy: true });
 vi.mock("../localApi", { spy: true });
 vi.mock(import("../state/server"), async (original) => {
@@ -511,5 +518,140 @@ describe("sidebar settled pagination", () => {
     const loadedRows = screen.container.querySelectorAll("[data-thread-item]").length;
     await act(() => moreButton.click());
     expect(screen.container.querySelectorAll("[data-thread-item]")).toHaveLength(loadedRows);
+  });
+});
+
+describe("対応済みの見出しメニュー", () => {
+  it("ボタンと右クリックで開き、確認したあとにだけアーカイブする", async () => {
+    const activeProject = project("active");
+    const settled = makeThreadFixture({
+      environmentId: activeProject.environmentId,
+      projectId: activeProject.id,
+      id: ThreadId.make("settled-0"),
+      title: "Settled thread",
+      settledOverride: "settled",
+      settledAt: "2026-01-01T00:00:00.000Z",
+    });
+    const show = vi.fn().mockResolvedValue(null);
+    const confirm = vi.fn().mockResolvedValue(false);
+    vi.mocked(readLocalApi).mockReturnValue({
+      contextMenu: { show },
+      dialogs: { confirm },
+    } as unknown as LocalApi);
+    const mutate = vi.fn().mockResolvedValue({ _tag: "Success" });
+    vi.mocked(useOrchestrationCommand).mockReturnValue(mutate);
+    vi.mocked(readEnvironmentScope).mockReturnValue(true);
+    vi.mocked(useEnvironmentScope).mockReturnValue(true);
+    vi.mocked(readThreadShell).mockReturnValue(settled);
+    vi.mocked(useConnectedEnvironmentIds).mockReturnValue([activeProject.environmentId]);
+    vi.mocked(useProjects).mockReturnValue([activeProject]);
+    vi.mocked(useQuietThreadShells).mockReturnValue([settled]);
+    vi.mocked(useThreadRouteTarget).mockReturnValue(null);
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: null,
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn().mockResolvedValue(null),
+      routeDraftId: null,
+      routeThreadRef: null,
+    });
+    vi.mocked(useServerConfigs).mockReturnValue(
+      new Map([
+        [
+          activeProject.environmentId,
+          {
+            scratchWorkspaceRoot: null,
+            shellThreadFamilies: false,
+          } as unknown as EnvironmentServerConfig,
+        ],
+      ]),
+    );
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+
+    await userEvent.click(screen.getByTestId("sidebar-settled-shelf-toggle"), { button: "right" });
+    await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1));
+    expect(show.mock.lastCall?.[0]).toMatchObject([
+      { id: "archive", disabled: false },
+      { id: "delete", destructive: true, disabled: false },
+      { id: "auto-settle-settings" },
+      { id: "section-colors" },
+      { id: "working-section" },
+    ]);
+
+    show.mockResolvedValue("archive");
+    const menuButton = screen.getByRole("button", { name: "Settled section options" });
+    await act(() => (menuButton.element() as HTMLButtonElement).click());
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(mutate).not.toHaveBeenCalled();
+
+    confirm.mockResolvedValue(true);
+    await act(() => (menuButton.element() as HTMLButtonElement).click());
+    await vi.waitFor(() =>
+      expect(mutate).toHaveBeenCalledExactlyOnceWith({
+        environmentId: settled.environmentId,
+        input: { threadId: settled.id },
+      }),
+    );
+  });
+});
+
+describe("区分のアイコン", () => {
+  it.each([true, false])("受信箱より下の行のタイトル横に印を付ける（有効=%s）", async (enabled) => {
+    using stack = new DisposableStack();
+    const previousSettings = getClientSettings();
+    stack.defer(() => __setClientSettingsForTests(previousSettings));
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      sidebarSectionColorsEnabled: enabled,
+    });
+    const activeProject = project("active");
+    const settled = makeThreadFixture({
+      environmentId: activeProject.environmentId,
+      projectId: activeProject.id,
+      id: ThreadId.make("settled-0"),
+      title: "Settled thread",
+      settledOverride: "settled",
+      settledAt: "2026-01-01T00:00:00.000Z",
+    });
+    const threadRef = { environmentId: settled.environmentId, threadId: settled.id };
+    vi.mocked(useProjects).mockReturnValue([activeProject]);
+    vi.mocked(useQuietThreadShells).mockReturnValue([threadShell(activeProject.id, 0), settled]);
+    // 開いているスレッドの行は、区分を閉じていても残る。
+    vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef });
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: null,
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn().mockResolvedValue(null),
+      routeDraftId: null,
+      routeThreadRef: threadRef,
+    });
+    vi.mocked(useServerConfigs).mockReturnValue(
+      new Map([
+        [
+          activeProject.environmentId,
+          {
+            scratchWorkspaceRoot: null,
+            shellThreadFamilies: false,
+          } as unknown as EnvironmentServerConfig,
+        ],
+      ]),
+    );
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+    await expect.element(screen.getByText("Settled thread").first()).toBeInTheDocument();
+    // 印が付くのは対応済みの行だけで、受信箱の行には付かない。
+    expect(
+      screen.container.querySelectorAll('[data-testid="sidebar-row-section-icon"]'),
+    ).toHaveLength(enabled ? 1 : 0);
   });
 });

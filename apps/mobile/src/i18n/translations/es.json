@@ -5775,5 +5775,18 @@
   "8d37e1dd4408a2fe": "Aún no se ha depurado. La primera pasada se ejecuta unos minutos después de activar la depuración, o después de iniciar el servidor si ya está activada.",
   "18bb2dd8209b1919": "Última limpieza: {last}. La próxima pasada ya toca.",
   "e2f5de1dcb452026": "Última limpieza: {last}. Próxima pasada: {next}.",
-  "a3f33b0f3d5430d9": "Cambiar la limpieza del historial de hilos requiere acceso de mantenimiento a este entorno."
+  "a3f33b0f3d5430d9": "Cambiar la limpieza del historial de hilos requiere acceso de mantenimiento a este entorno.",
+  "227f577eb246983a": "No se pudieron cargar los hilos anteriores",
+  "9322c2401e23b624": "{count, plural, one {Falló {count} hilo.} other {Fallaron {count} hilos.}}",
+  "979f462b839c6844": "No se incluyen los hilos de entornos desconectados.",
+  "5ae02c83ba99f9db": "{count, plural, one {¿Archivar {count} hilo resuelto?} other {¿Archivar {count} hilos resueltos?}}",
+  "a5bf575fed3877db": "{count, plural, one {¿Eliminar {count} hilo resuelto?} other {¿Eliminar {count} hilos resueltos?}}",
+  "b09acd1f355dcfc4": "Los hilos archivados se pueden restaurar desde Ajustes.",
+  "a1e95451f9afe978": "Esto borra de forma permanente el historial de conversación de estos hilos.",
+  "977183cf668edaa2": "colores de sección",
+  "d524901b60c8e30d": "Colores de sección",
+  "c1fd1a57d91464cf": "Archivar todo…",
+  "84ef37a4933bb484": "Eliminar todo…",
+  "0eb0e3e0af2fae6b": "Ajustes de resolución automática…",
+  "73bbf83b3a9088c5": "Mostrar la sección En curso"
 }

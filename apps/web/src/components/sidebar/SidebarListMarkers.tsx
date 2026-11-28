@@ -1,13 +1,19 @@
 import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import type { ContextMenuSource } from "@t3tools/contracts";
+import { EllipsisIcon } from "lucide-react";
 import { type ReactNode, useLayoutEffect } from "react";
 import { cn } from "~/lib/utils";
+import { useClientSettings } from "../../hooks/useSettings";
+import { contextMenuSourceOf, openContextMenuFromKeyboard } from "../../contextMenuSource";
+import { Button } from "../ui/button";
 import {
   animateSidebarLayoutChanges,
   sidebarMarkerId,
   type SidebarListMarker,
 } from "../Sidebar.logic";
+import { SIDEBAR_SECTION_MARKS } from "./sectionMarks";
 import { SIDEBAR_SORTABLE_DRAG_DISABLED } from "./SidebarThreadRow";
 
 function SortableSidebarMarker(props: {
@@ -119,7 +125,14 @@ export function SidebarSectionHeader(props: {
   dragging?: boolean;
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
+  /** 区分全体の操作。末尾のボタンと、見出しの右クリックで開く。 */
+  menu?: {
+    label: string;
+    onOpen: (position: { x: number; y: number }, source: ContextMenuSource) => void;
+  };
 }) {
+  const { menu } = props;
+  const colored = useClientSettings((settings) => settings.sidebarSectionColorsEnabled);
   const shelf =
     props.marker === "working-header"
       ? "working"
@@ -130,18 +143,56 @@ export function SidebarSectionHeader(props: {
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
-      className={cn("relative mx-0.5 h-8", props.className)}
+      className={cn("group/shelf-header relative mx-0.5 h-8", props.className)}
     >
       <CollapsibleSectionHeader
         data-sidebar-row={`shelf:${shelf}`}
         onClick={props.toggle.onToggle}
+        onContextMenu={
+          menu
+            ? (event) => {
+                event.preventDefault();
+                menu.onOpen({ x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
+              }
+            : undefined
+        }
+        onKeyDown={menu ? openContextMenuFromKeyboard : undefined}
         expanded={props.toggle.expanded}
+        {...(colored ? { lineColor: SIDEBAR_SECTION_MARKS[shelf].color } : {})}
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
-        accessory={<span className="font-normal tabular-nums">{props.count}</span>}
+        accessory={
+          <span
+            className={cn(
+              "font-normal tabular-nums",
+              menu &&
+                "group-hover/shelf-header:invisible group-has-[[data-sidebar-action-for]:focus]/shelf-header:invisible pointer-coarse:me-7",
+            )}
+          >
+            {props.count}
+          </span>
+        }
       >
         {props.label}
       </CollapsibleSectionHeader>
+      {menu ? (
+        // 矢印の左に置く。マウスでは件数に重ね、タッチ端末では件数を左へ寄せて並べる。
+        <span className="absolute inset-y-0 right-6 flex items-center opacity-0 focus-within:opacity-100 group-hover/shelf-header:opacity-100 pointer-coarse:opacity-100">
+          <Button
+            data-sidebar-action-for={`shelf:${shelf}`}
+            size="icon-xs"
+            variant="ghost-muted"
+            aria-label={menu.label}
+            aria-haspopup="menu"
+            onClick={(event) => {
+              const bounds = event.currentTarget.getBoundingClientRect();
+              menu.onOpen({ x: bounds.left, y: bounds.bottom }, contextMenuSourceOf(event));
+            }}
+          >
+            <EllipsisIcon aria-hidden />
+          </Button>
+        </span>
+      ) : null}
     </SortableSidebarMarker>
   );
 }

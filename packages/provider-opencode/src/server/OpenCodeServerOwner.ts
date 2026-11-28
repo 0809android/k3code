@@ -31,6 +31,11 @@ export const make = Effect.fn("OpenCodeServerOwner.make")(function* (input: {
   readonly directory: string;
   readonly serverPassword?: string;
   readonly environment?: NodeJS.ProcessEnv;
+  /** 起動のたびに環境を作り直す。失敗すると起動せず、次に使うときにやり直す。 */
+  readonly startEnvironment?: Effect.Effect<
+    NodeJS.ProcessEnv,
+    OpenCodeRuntime.OpenCodeRuntimeError
+  >;
   readonly verify?: (url: string) => Effect.Effect<string, OpenCodeRuntime.OpenCodeRuntimeError>;
 }) {
   const runtime = yield* OpenCodeRuntime.OpenCodeRuntime;
@@ -96,19 +101,24 @@ export const make = Effect.fn("OpenCodeServerOwner.make")(function* (input: {
       return yield* Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const serverScope = yield* Scope.make();
+          const start = (environment: NodeJS.ProcessEnv | undefined) =>
+            runtime
+              .startOpenCodeServerProcess({
+                binaryPath: input.binaryPath,
+                directory: input.directory,
+                ...(input.serverPassword !== undefined
+                  ? { serverPassword: input.serverPassword }
+                  : {}),
+                ...(environment ? { environment } : {}),
+                ...(input.verify ? { verify: input.verify } : {}),
+              })
+              .pipe(Effect.provideService(Scope.Scope, serverScope));
+          // 起動前の準備がないときは、余分な処理を挟まない。
           const started = yield* Effect.exit(
             restore(
-              runtime
-                .startOpenCodeServerProcess({
-                  binaryPath: input.binaryPath,
-                  directory: input.directory,
-                  ...(input.serverPassword !== undefined
-                    ? { serverPassword: input.serverPassword }
-                    : {}),
-                  ...(input.environment ? { environment: input.environment } : {}),
-                  ...(input.verify ? { verify: input.verify } : {}),
-                })
-                .pipe(Effect.provideService(Scope.Scope, serverScope)),
+              input.startEnvironment
+                ? Effect.flatMap(input.startEnvironment, start)
+                : start(input.environment),
             ),
           );
           if (Exit.isFailure(started)) {

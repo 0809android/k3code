@@ -1892,3 +1892,31 @@ describe("queued messages keep a settled thread active", () => {
     expect(layout.settledCount).toBe(1);
   });
 });
+
+describe("一覧の区分の印", () => {
+  it("区分の見出しより下の行にだけ、その区分の印を付ける", () => {
+    const entry = (id: string) => ({
+      thread: makeThreadShellFixture({ id: ThreadId.make(id) }),
+      variant: "slim" as const,
+      snoozed: false,
+      pinned: false,
+      wokeAt: null,
+      isLast: false,
+    });
+    const items = buildThreadListV2ListItems({
+      items: [entry("inbox"), entry("working"), entry("settled")],
+      pendingTasks: [],
+      workingCount: 1,
+      workingShelfHeaderIndex: 1,
+      settledCount: 1,
+      settledShelfHeaderIndex: 2,
+      snoozeEnvironmentIds: new Set(),
+    });
+
+    expect(items.flatMap((item) => (item.type === "v2-thread" ? [item.sectionMark] : []))).toEqual([
+      undefined,
+      "working",
+      "settled",
+    ]);
+  });
+});

@@ -117,6 +117,7 @@ import {
 import { pickSnoozePreset, resolveSnoozePresets, type SnoozePreset } from "../Sidebar.snooze";
 import { useThreadShell } from "../../state/entities";
 import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";
+import { SIDEBAR_SECTION_MARKS, type SidebarMarkedSection } from "./sectionMarks";
 import { ThreadSearchMatchExcerpt } from "../ThreadSearchMatch";
 import { makeWorkspaceFileDropHandlers } from "../chat/workspaceFileDrop";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
@@ -586,6 +587,8 @@ type SidebarThreadRowProps = {
   // "folder-multiline" adds the card's environment and PR line under it.
   variant: "card" | "slim" | "folder" | "folder-multiline";
   navigationParent?: string | undefined;
+  /** 受信箱より下で、この行が入っている区分。色分けがオンのときだけ渡す。 */
+  sectionMark?: SidebarMarkedSection | undefined;
   variantAction: SidebarSweepAction;
   settlementSupported: boolean;
   snoozeSupported: boolean;
@@ -1014,7 +1017,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     variantAction === "unsettle" &&
       !props.isActive &&
-      "[&:not(:hover):not(:focus-within)_*:not(.live-activity-focus_*)]:text-secondary-label",
+      "[&:not(:hover):not(:focus-within)_*:not(.live-activity-focus_*):not([data-section-icon]):not([data-section-icon]_*)]:text-secondary-label",
     props.isActive
       ? "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
       : isSelected || props.sweepAction !== null
@@ -1310,6 +1313,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     </span>
   ) : null;
 
+  const sectionMark = props.sectionMark ? SIDEBAR_SECTION_MARKS[props.sectionMark] : null;
+  // 状態は行の読み上げ文に含まれるので、アイコンは見た目だけにする。
+  const sectionIcon = sectionMark ? (
+    <sectionMark.icon
+      aria-hidden
+      data-testid="sidebar-row-section-icon"
+      // 対応済みの行は全体を灰色にするが、この印は除く。
+      data-section-icon
+      className={cn("size-3 shrink-0", sectionMark.iconClassName)}
+    />
+  ) : null;
+
   if (variant !== "card") {
     const multiline = variant === "folder-multiline";
     const inFolder = variant === "folder" || multiline;
@@ -1354,6 +1369,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           >
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
+              {sectionIcon}
               {inFolder ? null : (
                 <span
                   className={cn(
@@ -1715,6 +1731,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {props.sweepAction !== null ? dragDestination : null}
             </div>
             <div className="mt-1 flex min-w-0 items-center gap-1.5">
+              {sectionIcon}
               {title}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">

@@ -5775,5 +5775,18 @@
   "8d37e1dd4408a2fe": "Pas encore nettoyé. Le premier passage s'exécute quelques minutes après l'activation du nettoyage, ou après le démarrage du serveur s'il est déjà activé.",
   "18bb2dd8209b1919": "Dernier nettoyage : {last}. Le prochain passage est dû.",
   "e2f5de1dcb452026": "Dernier nettoyage : {last}. Prochain passage : {next}.",
-  "a3f33b0f3d5430d9": "Modifier le nettoyage de l'historique des fils nécessite un accès de maintenance à cet environnement."
+  "a3f33b0f3d5430d9": "Modifier le nettoyage de l'historique des fils nécessite un accès de maintenance à cet environnement.",
+  "227f577eb246983a": "Impossible de charger les anciens fils",
+  "9322c2401e23b624": "{count, plural, one {Échec pour {count} fil.} other {Échec pour {count} fils.}}",
+  "979f462b839c6844": "Les fils des environnements déconnectés ne sont pas inclus.",
+  "5ae02c83ba99f9db": "{count, plural, one {Archiver {count} fil réglé ?} other {Archiver {count} fils réglés ?}}",
+  "a5bf575fed3877db": "{count, plural, one {Supprimer {count} fil réglé ?} other {Supprimer {count} fils réglés ?}}",
+  "b09acd1f355dcfc4": "Les fils archivés peuvent être restaurés depuis les réglages.",
+  "a1e95451f9afe978": "Cela efface définitivement l’historique de conversation de ces fils.",
+  "977183cf668edaa2": "couleurs des sections",
+  "d524901b60c8e30d": "Couleurs des sections",
+  "c1fd1a57d91464cf": "Tout archiver…",
+  "84ef37a4933bb484": "Tout supprimer…",
+  "0eb0e3e0af2fae6b": "Réglages du règlement automatique…",
+  "73bbf83b3a9088c5": "Afficher la section En cours"
 }

@@ -57,6 +57,7 @@ import {
 } from "../home/homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
 import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
+import { useSettledShelfBulkActions } from "../home/useSettledShelfBulkActions";
 import { useThreadListActions } from "../home/useThreadListActions";
 import { useFabScroll } from "../home/FabScrollContext";
 import { WorkspaceListHeader } from "../layout/workspace/WorkspaceListHeader";
@@ -251,6 +252,8 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
+    sectionColorsEnabled,
+    showWorkingSection,
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
@@ -276,6 +279,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     items: threadListV2Items,
     contentOnlyThreadKeys,
     olderSettledShelf,
+    settledScopes,
   } = useThreadListV2({
     threads: launchingThreads,
     pendingTasks,
@@ -297,6 +301,10 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey,
+  });
+  const settledBulkActions = useSettledShelfBulkActions({
+    threads: threadListV2Layout.settledThreads,
+    scopes: settledScopes,
   });
   const listItems: readonly SidebarListItem[] =
     settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0
@@ -366,6 +374,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     listEnvironments,
     threadSearchMatchByKey,
     workingShelfEnabled,
+    sectionColorsEnabled,
   };
   useThreadJumpShortcuts(listItems, handleSelectThread, props.onOpenPendingTask);
   const sidebarItemsAreEqual = (previous: SidebarListItem, item: SidebarListItem): boolean => {
@@ -421,6 +430,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             onNewThreadOnBranch={props.onNewThreadOnBranch}
             thread={thread}
             variant={item.item.variant}
+            sectionMark={sectionColorsEnabled ? item.sectionMark : undefined}
             hasQueuedMessages={item.hasQueuedMessages}
             snoozed={item.item.snoozed}
             pinned={item.item.pinned}
@@ -483,6 +493,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             onPinThread={pinThread}
             onUnpinThread={unpinThread}
             onSetThreadAutoSettle={setThreadAutoSettle}
+            onShowWorkingSection={workingShelfEnabled ? undefined : showWorkingSection}
             onMoveThread={moveThread}
             onSwipeableClose={handleSwipeableClose}
             onSwipeableWillOpen={handleSwipeableWillOpen}
@@ -517,6 +528,8 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             disabled={item.disabled}
             expanded={item.expanded}
             onToggle={toggleSettledShelf}
+            onArchiveAll={settledBulkActions.archiveAll}
+            onDeleteAll={settledBulkActions.deleteAll}
             pane="sidebar"
           />
         );

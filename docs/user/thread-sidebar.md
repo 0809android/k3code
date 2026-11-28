@@ -222,6 +222,11 @@ sidebar and search and shows only in **Settings → Archive**, where you can una
 delete it. It refuses new messages, including ones from agents and scheduled tasks, until you
 unarchive it. Removing a project deletes its threads either way.
 
+区分の見出しを右クリック（スマホでは長押し）すると、区分に関する設定を切り替えられます。
+**対応済み**の見出しからは、区分の中身をまとめてアーカイブ・削除できます。まだ表示していない古い
+スレッドも対象で、プロジェクトの絞り込みには従います。まとめて削除する操作ではワークツリーを消し
+ませんが、ワークツリーの自動クリーンアップを有効にしている場合は、その設定に従って消えます。
+
 A scheduled task that posts into one thread keeps running after you archive that thread, and
 each run fails. Settle the thread instead, or move or pause the task in **Settings → Scheduled
 tasks**.

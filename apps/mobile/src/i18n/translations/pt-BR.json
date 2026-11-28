@@ -5775,5 +5775,18 @@
   "8d37e1dd4408a2fe": "Ainda não foi limpo. A primeira passagem é executada alguns minutos depois de ativar a limpeza, ou depois da inicialização do servidor se ela já estiver ativada.",
   "18bb2dd8209b1919": "Última limpeza: {last}. A próxima passagem já está pendente.",
   "e2f5de1dcb452026": "Última limpeza: {last}. Próxima passagem: {next}.",
-  "a3f33b0f3d5430d9": "Alterar a limpeza do histórico de threads exige acesso de manutenção a este ambiente."
+  "a3f33b0f3d5430d9": "Alterar a limpeza do histórico de threads exige acesso de manutenção a este ambiente.",
+  "227f577eb246983a": "Não foi possível carregar as conversas antigas",
+  "9322c2401e23b624": "{count, plural, one {Falha em {count} conversa.} other {Falha em {count} conversas.}}",
+  "979f462b839c6844": "Conversas de ambientes desconectados não são incluídas.",
+  "5ae02c83ba99f9db": "{count, plural, one {Arquivar {count} conversa resolvida?} other {Arquivar {count} conversas resolvidas?}}",
+  "a5bf575fed3877db": "{count, plural, one {Excluir {count} conversa resolvida?} other {Excluir {count} conversas resolvidas?}}",
+  "b09acd1f355dcfc4": "As conversas arquivadas podem ser restauradas nas Configurações.",
+  "a1e95451f9afe978": "Isso apaga permanentemente o histórico de conversa dessas threads.",
+  "977183cf668edaa2": "cores das seções",
+  "d524901b60c8e30d": "Cores das seções",
+  "c1fd1a57d91464cf": "Arquivar tudo…",
+  "84ef37a4933bb484": "Excluir tudo…",
+  "0eb0e3e0af2fae6b": "Configurações de resolução automática…",
+  "73bbf83b3a9088c5": "Mostrar a seção Em andamento"
 }

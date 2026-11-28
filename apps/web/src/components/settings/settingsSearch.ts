@@ -519,6 +519,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("hide fold running monitoring threads inbox sidebar shelf")],
   },
   {
+    id: "section-colors",
+    title: msg("Section colors"),
+    to: "/settings/general",
+    searchTerms: [msg("color icon line border divider sidebar working snoozed settled heading")],
+  },
+  {
     id: "boring-sidebar",
     title: msg("Boring sidebar (group by project)"),
     to: "/settings/labs",

@@ -420,6 +420,8 @@ export interface ThreadListV2Item {
 export interface ThreadListV2Layout {
   readonly items: ThreadListV2Item[];
   readonly hiddenSettledCount: number;
+  /** 範囲内で手元にある対応済みスレッドのすべて。区分全体の操作に使う。 */
+  readonly settledThreads: ReadonlyArray<EnvironmentThreadShell>;
   /** The settled rows the shelf may list, before its visible limit. */
   readonly listedSettledThreads: ReadonlyArray<EnvironmentThreadShell>;
   readonly workingCount: number;
@@ -434,10 +436,14 @@ export interface ThreadListV2Layout {
   readonly contentOnlyThreadKeys: ReadonlySet<string>;
 }
 
+export type ThreadListV2Section = "working" | "snoozed" | "settled";
+
 export interface ThreadListV2ThreadListItem {
   readonly type: "v2-thread";
   readonly key: string;
   readonly item: ThreadListV2Item;
+  /** 受信箱より下で、この行が入っている区分。 */
+  readonly sectionMark: ThreadListV2Section | undefined;
   readonly snoozeWakeLabelText: string | undefined;
   readonly timeLabel: string;
   readonly snoozePresetMinute: string | undefined;
@@ -510,6 +516,7 @@ export function threadListV2ListItemsAreEqual(
       return (
         previous.type === "v2-thread" &&
         previous.key === item.key &&
+        previous.sectionMark === item.sectionMark &&
         previous.item.thread === item.item.thread &&
         previous.item.variant === item.item.variant &&
         previous.item.snoozed === item.item.snoozed &&
@@ -620,6 +627,7 @@ export function buildThreadListV2ListItems(input: {
       type: "v2-thread",
       key: `v2-thread:${item.thread.environmentId}:${item.thread.id}`,
       item,
+      sectionMark: undefined,
       snoozeWakeLabelText,
       timeLabel: resolveThreadListV2ItemTimeLabel(item, snoozeWakeLabelText !== undefined, resolve),
       snoozePresetMinute,
@@ -648,6 +656,8 @@ export function buildThreadListV2ListItems(input: {
   const activeEnd = workingShelfHeaderIndex ?? workingEnd;
   const result: ThreadListV2ListItem[] = [...pendingItems, ...threadItems.slice(0, activeEnd)];
   const shelfDisabled = input.shelfPreferencesLoading === true;
+  const marked = (section: ThreadListV2Section, rows: ReadonlyArray<ThreadListV2ListItem>) =>
+    rows.map((row) => (row.type === "v2-thread" ? { ...row, sectionMark: section } : row));
   if (workingShelfHeaderIndex !== null && workingCount > 0) {
     result.push({
       type: "v2-working-shelf",
@@ -656,7 +666,7 @@ export function buildThreadListV2ListItems(input: {
       expanded: input.workingShelfExpanded === true,
       disabled: shelfDisabled,
     });
-    result.push(...threadItems.slice(workingShelfHeaderIndex, workingEnd));
+    result.push(...marked("working", threadItems.slice(workingShelfHeaderIndex, workingEnd)));
   }
   if (snoozedShelfHeaderIndex !== null && snoozedCount > 0) {
     result.push({
@@ -666,7 +676,7 @@ export function buildThreadListV2ListItems(input: {
       expanded: input.snoozedShelfExpanded === true,
       disabled: shelfDisabled,
     });
-    result.push(...threadItems.slice(snoozedShelfHeaderIndex, snoozedEnd));
+    result.push(...marked("snoozed", threadItems.slice(snoozedShelfHeaderIndex, snoozedEnd)));
   }
   if (settledShelfHeaderIndex !== null && settledCount > 0) {
     result.push({
@@ -676,7 +686,7 @@ export function buildThreadListV2ListItems(input: {
       expanded: input.settledShelfExpanded !== false,
       disabled: shelfDisabled,
     });
-    result.push(...threadItems.slice(settledShelfHeaderIndex));
+    result.push(...marked("settled", threadItems.slice(settledShelfHeaderIndex)));
   }
   return result.map((entry, index) => {
     if (entry.type !== "v2-thread" && entry.type !== "v2-pending") return entry;
@@ -849,6 +859,7 @@ export function buildThreadListV2Items(input: {
         isLast: index === results.length - 1,
       })),
       hiddenSettledCount: 0,
+      settledThreads: [],
       listedSettledThreads: [],
       workingCount: 0,
       workingShelfHeaderIndex: null,
@@ -972,6 +983,7 @@ export function buildThreadListV2Items(input: {
   return {
     items,
     hiddenSettledCount: Math.max(0, settledTotal - pagedSettled.length),
+    settledThreads: orderedSettled,
     listedSettledThreads: listedSettled,
     workingCount: orderedWorking.length,
     workingShelfHeaderIndex,

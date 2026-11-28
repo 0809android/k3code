@@ -4,6 +4,7 @@ import {
   AuthSettingsWriteScope,
   AuthProvidersManageScope,
   AuthOrchestrationReadScope,
+  isManagedDriverAllowed,
 } from "@t3tools/contracts";
 import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { useAtomValue } from "@effect/atom-react";
@@ -40,8 +41,8 @@ import {
 import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Result from "effect/Result";
-import { PlusIcon } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { KeyRoundIcon, PlusIcon } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { m as resolveNow, type MessageResolver } from "../../i18n/messages";
 
@@ -97,6 +98,8 @@ import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
+import { ApiServiceDialog } from "./ApiServiceDialog";
+import { apiServiceDialogRequest } from "./apiServices";
 import { useManagedPolicy } from "~/state/managedPolicy";
 import { ExpandableText } from "./ExpandableText";
 import { IntervalSecondsField } from "./IntervalSecondsField";
@@ -582,6 +585,16 @@ export function EnvironmentProviderSettings({
   // A policy that allows no provider leaves nothing to add.
   const canAddProvider =
     !readOnly && managedPolicy?.limits?.providers?.allowedDrivers?.length !== 0;
+  // 古いサーバーは接続先の指定を黙って捨てるので、対応しているサーバーでだけ出す。
+  const supportsApiServices = useAtomValue(
+    serverEnvironment.configValueAtom(environmentId),
+    (config) => config?.environment.capabilities.apiServices === true,
+  );
+  // API サービスは OpenCode で動くので、方針が OpenCode を許す場合だけ追加できる。
+  const canAddApiService =
+    supportsApiServices &&
+    canAddProvider &&
+    isManagedDriverAllowed(managedPolicy, ProviderDriverKind.make("opencode"));
   const canWriteSettings = useEnvironmentScope(environmentId, AuthSettingsWriteScope);
   const canRefreshProviders = useEnvironmentScope(environmentId, AuthOrchestrationReadScope);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
@@ -609,6 +622,21 @@ export function EnvironmentProviderSettings({
   });
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
   const [isAddInstanceDialogOpen, setIsAddInstanceDialogOpen] = useState(false);
+  const [isApiServiceDialogOpen, setIsApiServiceDialogOpen] = useState(
+    () => apiServiceDialogRequest.get() === environmentId,
+  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- モデル選択欄が出す外部の合図を購読し、受け取ったら消す
+  useEffect(() => {
+    const take = () => {
+      if (apiServiceDialogRequest.get() !== environmentId) return false;
+      apiServiceDialogRequest.clear();
+      return true;
+    };
+    take();
+    return apiServiceDialogRequest.subscribe(() => {
+      if (take()) setIsApiServiceDialogOpen(true);
+    });
+  }, [environmentId]);
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | null>(
     targetInstanceId ?? null,
   );
@@ -1122,6 +1150,16 @@ export function EnvironmentProviderSettings({
                     <T>Add provider</T>
                   </button>
                 ) : null}
+                {canAddApiService ? (
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer items-center gap-3 px-3 py-3 text-left text-sm text-muted-foreground transition-colors outline-none hover:bg-muted/25 hover:text-foreground focus-visible:bg-muted/25 focus-visible:text-foreground sm:px-4"
+                    onClick={() => setIsApiServiceDialogOpen(true)}
+                  >
+                    <KeyRoundIcon className="size-4 shrink-0" />
+                    <T>Add an API service</T>
+                  </button>
+                ) : null}
               </div>
             </ScrollArea>
           </div>
@@ -1246,6 +1284,13 @@ export function EnvironmentProviderSettings({
           environmentLabel={environmentLabel}
           onOpenChange={setIsAddInstanceDialogOpen}
           onCreated={setSelectedInstanceId}
+        />
+      ) : null}
+      {isApiServiceDialogOpen && canAddApiService ? (
+        <ApiServiceDialog
+          environmentId={environmentId}
+          environmentLabel={environmentLabel}
+          onClose={() => setIsApiServiceDialogOpen(false)}
         />
       ) : null}
     </>

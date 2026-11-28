@@ -5783,5 +5783,18 @@
   "8d37e1dd4408a2fe": "Not trimmed yet. The first pass runs a few minutes after you turn trimming on, or after the server starts if it is already on.",
   "18bb2dd8209b1919": "Last trimmed {last}. The next pass is due.",
   "e2f5de1dcb452026": "Last trimmed {last}. Next pass {next}.",
-  "a3f33b0f3d5430d9": "Changing thread history trimming needs maintenance access to this environment."
+  "a3f33b0f3d5430d9": "Changing thread history trimming needs maintenance access to this environment.",
+  "227f577eb246983a": "Could not load older threads",
+  "9322c2401e23b624": "{count, plural, one {{count} thread failed.} other {{count} threads failed.}}",
+  "979f462b839c6844": "Threads on disconnected environments are not included.",
+  "5ae02c83ba99f9db": "{count, plural, one {Archive {count} settled thread?} other {Archive {count} settled threads?}}",
+  "a5bf575fed3877db": "{count, plural, one {Delete {count} settled thread?} other {Delete {count} settled threads?}}",
+  "b09acd1f355dcfc4": "Archived threads can be restored from Settings.",
+  "a1e95451f9afe978": "This permanently clears conversation history for these threads.",
+  "977183cf668edaa2": "section colors",
+  "d524901b60c8e30d": "Section colors",
+  "c1fd1a57d91464cf": "Archive all…",
+  "84ef37a4933bb484": "Delete all…",
+  "0eb0e3e0af2fae6b": "Auto-settle settings…",
+  "73bbf83b3a9088c5": "Show Working section"
 }

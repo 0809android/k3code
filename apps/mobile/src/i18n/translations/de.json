@@ -5781,5 +5781,18 @@
   "8d37e1dd4408a2fe": "Noch nicht bereinigt. Der erste Durchlauf startet einige Minuten nach dem Einschalten der Bereinigung, oder nach dem Serverstart, wenn sie bereits eingeschaltet ist.",
   "18bb2dd8209b1919": "Zuletzt bereinigt: {last}. Der nächste Durchlauf ist fällig.",
   "e2f5de1dcb452026": "Zuletzt bereinigt: {last}. Nächster Durchlauf: {next}.",
-  "a3f33b0f3d5430d9": "Zum Ändern der Verlaufsbereinigung ist Wartungszugriff auf diese Umgebung nötig."
+  "a3f33b0f3d5430d9": "Zum Ändern der Verlaufsbereinigung ist Wartungszugriff auf diese Umgebung nötig.",
+  "227f577eb246983a": "Ältere Threads konnten nicht geladen werden",
+  "9322c2401e23b624": "{count, plural, one {{count} Thread ist fehlgeschlagen.} other {{count} Threads sind fehlgeschlagen.}}",
+  "979f462b839c6844": "Threads in nicht verbundenen Umgebungen sind nicht enthalten.",
+  "5ae02c83ba99f9db": "{count, plural, one {{count} erledigten Thread archivieren?} other {{count} erledigte Threads archivieren?}}",
+  "a5bf575fed3877db": "{count, plural, one {{count} erledigten Thread löschen?} other {{count} erledigte Threads löschen?}}",
+  "b09acd1f355dcfc4": "Archivierte Threads lassen sich in den Einstellungen wiederherstellen.",
+  "a1e95451f9afe978": "Dadurch wird der Gesprächsverlauf dieser Threads dauerhaft gelöscht.",
+  "977183cf668edaa2": "abschnittsfarben",
+  "d524901b60c8e30d": "Abschnittsfarben",
+  "c1fd1a57d91464cf": "Alle archivieren…",
+  "84ef37a4933bb484": "Alle löschen…",
+  "0eb0e3e0af2fae6b": "Einstellungen für automatisches Erledigen…",
+  "73bbf83b3a9088c5": "Bereich für laufende Threads anzeigen"
 }

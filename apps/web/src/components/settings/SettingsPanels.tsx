@@ -545,6 +545,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? [gt("Working section")]
       : []),
+    ...(settings.sidebarSectionColorsEnabled !==
+    DEFAULT_UNIFIED_SETTINGS.sidebarSectionColorsEnabled
+      ? [gt("Section colors")]
+      : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
       ? [gt("Auto-settle inactive threads")]
       : []),
@@ -739,6 +743,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarSectionColorsEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarSectionColorsEnabled,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -983,6 +988,38 @@ export function GeneralSettingsPanel() {
                 updateSettings({ sidebarWorkingShelfEnabled: Boolean(checked) })
               }
               aria-label={gt("Working section")}
+            />
+          }
+        />
+        <SettingsRow
+          {...setting("section-colors")}
+          description={
+            <T>
+              Mark Working, Snoozed, and Settled threads with a colored icon beside their title, and
+              color the lines of those headings.
+            </T>
+          }
+          resetAction={
+            settings.sidebarSectionColorsEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.sidebarSectionColorsEnabled ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset section colors to default")}
+                onClick={() =>
+                  updateSettings({
+                    sidebarSectionColorsEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.sidebarSectionColorsEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.sidebarSectionColorsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarSectionColorsEnabled: Boolean(checked) })
+              }
+              aria-label={gt("Section colors")}
             />
           }
         />

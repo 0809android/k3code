@@ -8,18 +8,27 @@ const tones = {
   accent: { label: "text-primary", line: "bg-primary/50" },
 } as const;
 
+const lineColors = {
+  info: "bg-info/40",
+  warning: "bg-warning/40",
+  success: "bg-success/40",
+} as const;
+
 export function CollapsibleSectionHeader({
   children,
   expanded,
   tone = "muted",
   variant = "default",
   accessory,
+  lineColor,
   ...buttonProps
 }: Omit<ComponentProps<"button">, "className" | "style" | "aria-expanded"> & {
   expanded: boolean;
   tone?: keyof typeof tones;
   variant?: "default" | "panel";
   accessory?: ReactNode;
+  /** 区分を色の線で見分ける。件数があっても線を残す。 */
+  lineColor?: keyof typeof lineColors;
 }) {
   return (
     <button
@@ -36,7 +45,12 @@ export function CollapsibleSectionHeader({
       <span
         aria-hidden
         // A header with a trailing count drops its rule so it doesn't read as a leader.
-        className={cn("h-px min-w-2 flex-1", tones[tone].line, accessory && "invisible")}
+        className={cn(
+          "h-px min-w-2 flex-1",
+          // ドロップ先の強調色は、区分の色より優先する。
+          lineColor && tone !== "accent" ? lineColors[lineColor] : tones[tone].line,
+          accessory && !lineColor && "invisible",
+        )}
       />
       {accessory}
       <ChevronDownIcon

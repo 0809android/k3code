@@ -88,8 +88,12 @@ import {
   resolveThreadListV2SwipeActions,
   layoutThreadListV2RowMenuActions,
   threadListV2RowAccessibilityLabel,
+  type ThreadListV2Section as ThreadListV2ListSection,
   type ThreadListV2Status,
 } from "./threadListV2";
+import { saveMobilePreferences } from "../../state/preferences";
+import { openSettings } from "../settings/settings-navigation";
+import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { shouldRecedeThreadRow } from "./thread-row-emphasis";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
@@ -232,8 +236,36 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
   },
 ];
 
+// Web のサイドバーと同じ色分け。区分ごとに、行のアイコンと見出しの線で色をそろえる。
+const SECTION_MARKS = {
+  working: {
+    icon: "circle.dashed",
+    iconTintClassName: "accent-adaptive-sky-600-400",
+    lineClassName: "bg-adaptive-sky-600-400 opacity-40",
+  },
+  snoozed: {
+    icon: "clock",
+    iconTintClassName: "accent-warning-foreground",
+    lineClassName: "bg-warning-foreground opacity-40",
+  },
+  settled: {
+    icon: "checkmark",
+    iconTintClassName: "accent-adaptive-emerald-700-300",
+    lineClassName: "bg-adaptive-emerald-700-300 opacity-40",
+  },
+} as const satisfies Record<
+  ThreadListV2ListSection,
+  { icon: AppSymbolName; iconTintClassName: string; lineClassName: string }
+>;
+
 function ThreadListV2Section(props: {
   readonly label: string;
+  readonly lineClassName?: string | undefined;
+  /** 長押しで開く。設定の切り替えと、区分全体の操作。 */
+  readonly menu?: {
+    readonly actions: MenuAction[];
+    readonly onPressAction: (event: { readonly nativeEvent: { readonly event: string } }) => void;
+  };
   readonly pane?: "screen" | "sidebar";
   readonly tone?: "default" | "snoozed";
   readonly disclosure?: {
@@ -267,7 +299,8 @@ function ThreadListV2Section(props: {
       <View
         className={cn(
           "h-px flex-1",
-          snoozed ? "bg-primary/20" : sidebarPane ? "bg-drawer-border" : "bg-border",
+          props.lineClassName ??
+            (snoozed ? "bg-primary/20" : sidebarPane ? "bg-drawer-border" : "bg-border"),
         )}
       />
       {props.disclosure ? (
@@ -288,7 +321,7 @@ function ThreadListV2Section(props: {
     </>
   );
 
-  return props.disclosure ? (
+  const header = props.disclosure ? (
     <Pressable
       accessibilityHint={props.disclosure.accessibilityHint}
       accessibilityLabel={props.disclosure.accessibilityLabel}
@@ -307,6 +340,17 @@ function ThreadListV2Section(props: {
   ) : (
     <View className={className}>{content}</View>
   );
+  return props.menu && props.disclosure ? (
+    <Menu
+      actions={props.menu.actions}
+      onPressAction={props.menu.onPressAction}
+      shouldOpenOnLongPress
+    >
+      {header}
+    </Menu>
+  ) : (
+    header
+  );
 }
 
 const ThreadListV2SectionDivider = memo(function ThreadListV2SectionDivider(props: {
@@ -322,6 +366,9 @@ type ThreadListV2ShelfHeaderProps = {
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly pane?: "screen" | "sidebar";
+  /** 対応済みの区分だけで使う。 */
+  readonly onArchiveAll?: () => void;
+  readonly onDeleteAll?: () => void;
 };
 
 const SHELF_COPY = {
@@ -352,8 +399,57 @@ function ThreadListV2ShelfHeader(
   const m = useMessages();
   const copy = SHELF_COPY[props.kind];
   const label = m(copy.label);
+  const navigation = useNavigation();
+  const { sectionColorsEnabled, workingShelfEnabled } = useThreadListV2ShelfPreferences();
+  const savePreferences = useAtomCommand(saveMobilePreferences);
+  const actions: MenuAction[] = [
+    ...(props.kind === "settled"
+      ? [
+          {
+            id: "archive-all",
+            title: gt("Archive all…"),
+            image: "archivebox",
+          },
+          {
+            id: "delete-all",
+            title: gt("Delete all…"),
+            image: "trash",
+            attributes: { destructive: true },
+          },
+          { id: "auto-settle-settings", title: gt("Auto-settle settings…"), image: "gearshape" },
+        ]
+      : []),
+    {
+      id: "section-colors",
+      title: gt("Section colors"),
+      state: sectionColorsEnabled ? "on" : "off",
+    },
+    {
+      id: "working-section",
+      title: gt("Working section"),
+      state: workingShelfEnabled ? "on" : "off",
+    },
+  ];
+  const handleMenuAction = ({
+    nativeEvent,
+  }: {
+    readonly nativeEvent: { readonly event: string };
+  }) => {
+    if (nativeEvent.event === "archive-all") props.onArchiveAll?.();
+    if (nativeEvent.event === "delete-all") props.onDeleteAll?.();
+    // 環境とプロジェクトごとに値が違うので、設定画面を開く。
+    if (nativeEvent.event === "auto-settle-settings") openSettings(navigation, "SettingsThreads");
+    if (nativeEvent.event === "section-colors") {
+      void savePreferences({ sectionColorsEnabled: !sectionColorsEnabled });
+    }
+    if (nativeEvent.event === "working-section") {
+      void savePreferences({ workingShelfEnabled: !workingShelfEnabled });
+    }
+  };
   return (
     <ThreadListV2Section
+      lineClassName={sectionColorsEnabled ? SECTION_MARKS[props.kind].lineClassName : undefined}
+      menu={{ actions, onPressAction: handleMenuAction }}
       label={props.expanded ? label : gt("{label} ({count})", { label, count: props.count })}
       pane={props.pane}
       tone={props.kind === "snoozed" ? "snoozed" : "default"}
@@ -745,6 +841,8 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
+  /** 受信箱より下で、この行が入っている区分。色分けがオンのときだけ渡す。 */
+  readonly sectionMark?: ThreadListV2ListSection | undefined;
   readonly hasQueuedMessages?: boolean;
   readonly snoozed?: boolean;
   readonly pinned?: boolean;
@@ -778,6 +876,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly onPinThread: (thread: EnvironmentThreadShell) => void;
   readonly onUnpinThread: (thread: EnvironmentThreadShell) => void;
   readonly onSetThreadAutoSettle: (thread: EnvironmentThreadShell, enabled: boolean) => void;
+  /** 作業中の区分がオフのときだけ渡す。見出しが消えても、行のメニューから戻せる。 */
+  readonly onShowWorkingSection?: (() => void) | undefined;
   readonly settlementSupported: boolean;
   readonly snoozeSupported: boolean;
   readonly snoozePresets: ReadonlyArray<SnoozePresetSetting> | undefined;
@@ -829,6 +929,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onUnpinThread,
     onSetThreadAutoSettle,
     onMoveThread,
+    onShowWorkingSection,
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
@@ -1218,6 +1319,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "unpin") handleUnpin();
       if (nativeEvent.event === "auto-settle:enabled") handleSetAutoSettle(true);
       if (nativeEvent.event === "auto-settle:disabled") handleSetAutoSettle(false);
+      if (nativeEvent.event === "show-working-section") onShowWorkingSection?.();
       if (nativeEvent.event === "arrange") appAtomRegistry.set(threadArrangementOpenAtom, true);
       if (nativeEvent.event === "move-up") handleMoveUp();
       if (nativeEvent.event === "move-down") handleMoveDown();
@@ -1291,6 +1393,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleUnsettle,
       handleUnsnooze,
       markThreadUnread,
+      onShowWorkingSection,
       setCustomSnoozeOpen,
       snoozePresets,
       props.snoozePresets,
@@ -1366,10 +1469,26 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ? primaryAction.swipeHint
       : primaryAction.swipeSnoozeHint;
 
-  const titleTextInset = props.project ? projectIconSize + 8 : 0;
+  const mark = props.sectionMark ? SECTION_MARKS[props.sectionMark] : null;
+  // 状態は行の読み上げ文に含まれるので、アイコンは見た目だけにする。
+  const sectionIcon = mark ? (
+    <View className="justify-center" style={{ height: titleLineHeight }}>
+      <SymbolView
+        name={mark.icon}
+        size={12}
+        tintColorClassName={
+          selected ? selectedThreadRowColors.iconTintClassName : mark.iconTintClassName
+        }
+        type="monochrome"
+        weight="semibold"
+      />
+    </View>
+  ) : null;
+  const titleTextInset = (props.project ? projectIconSize + 8 : 0) + (mark ? 12 + 8 : 0);
   const cardContent = (
     <>
       <View className="flex-row items-start gap-2">
+        {sectionIcon}
         {props.project ? (
           <View className="justify-center" style={{ height: titleLineHeight }}>
             <ProjectFavicon
@@ -1690,6 +1809,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             sidebarPane && "px-3",
           )}
         >
+          {sectionIcon}
           {props.project ? (
             <View className="opacity-40">
               <ProjectFavicon
@@ -1786,7 +1906,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         {(close) => (
           <Menu
             accessibilityLabel={rowAccessibilityLabel}
-            actions={menuActions}
+            actions={
+              props.onShowWorkingSection
+                ? [
+                    ...menuActions,
+                    { id: "show-working-section", title: gt("Show Working section") },
+                  ]
+                : menuActions
+            }
             onPressAction={handleMenuAction}
             shouldOpenOnLongPress
           >

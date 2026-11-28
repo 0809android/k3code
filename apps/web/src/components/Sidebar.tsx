@@ -64,7 +64,9 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import {
+  readAllOlderSettledThreads,
   resolveListedAncestorThreadRef,
+  settledShelfTargets,
   type OlderSettledScope,
 } from "@t3tools/client-runtime/state/threads";
 
@@ -136,7 +138,7 @@ import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useClientSettings } from "../hooks/useSettings";
+import { updateClientSettings, useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -155,11 +157,14 @@ import {
   useQuietThreadShells,
 } from "../state/entities";
 import { environmentPresentations } from "../state/presentation";
-import { primaryServerKeybindingsAtom } from "../state/server";
+import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
 import { environmentProjects } from "../state/projects";
-import { threadEnvironment } from "../state/threads";
+import { environmentThreadShells, olderSettledThreads, threadEnvironment } from "../state/threads";
+import { orchestrationEnvironment } from "../state/orchestration";
+import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/olderSettledShelf";
 import { useThreadSearch } from "../state/queries";
+import type { SidebarMarkedSection } from "./sidebar/sectionMarks";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -938,6 +943,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
+  const sectionColorsEnabled = useClientSettings((s) => s.sidebarSectionColorsEnabled);
+  const workingShelfSetting = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -1449,6 +1456,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // Read changing maps/sets through refs so streamed events preserve row callbacks.
   const threadByKeyRef = useRef(threadByKey);
   const settledThreadKeysRef = useRef(settledThreadKeys);
+  const connectedEnvironmentIdsRef = useRef(connectedEnvironmentIds);
   const snoozedThreadKeysRef = useRef(snoozedThreadKeys);
 
   const { draftIds, routeDraftComposer } = useSidebarDrafts(
@@ -1844,6 +1852,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     orderedThreadKeysRef.current = orderedThreadKeys;
     threadByKeyRef.current = threadByKey;
     settledThreadKeysRef.current = settledThreadKeys;
+    connectedEnvironmentIdsRef.current = connectedEnvironmentIds;
     snoozedThreadKeysRef.current = snoozedThreadKeys;
     sectionByThreadKeyRef.current = sectionByThreadKey;
   });
@@ -2588,6 +2597,203 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   );
 
+  const loadOlderSettledPage = useAtomQueryRunner(orchestrationEnvironment.olderSettledThreads, {
+    reportFailure: false,
+    refresh: true,
+  });
+  const settledBulkRunningRef = useRef(false);
+
+  // 現在のプロジェクト範囲にある対応済みスレッド。接続していない環境は操作できないので外す。
+  const collectSettledShelfTargets = async () => {
+    // 確認中に切断されることがあるので、呼ぶたびに最新の接続状態を読む。
+    const connected = new Set(connectedEnvironmentIdsRef.current);
+    const scopes = olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys);
+    const cutOf = (environmentId: EnvironmentId) =>
+      appAtomRegistry.get(olderSettledThreads.olderSettledAtom(environmentId))?.before ?? null;
+    const older = await readAllOlderSettledThreads({
+      scopes: scopes.filter((scope) => connected.has(scope.environmentId)),
+      cutOf,
+      readPage: async (environmentId, input) => {
+        const result = await loadOlderSettledPage({ environmentId, input });
+        return result._tag === "Success" ? result.value : null;
+      },
+      isLoaded: (ref) => readThreadShell(ref) !== null,
+      hiddenTagsOf: (environmentId) =>
+        appAtomRegistry.get(serverEnvironment.hiddenThreadTagsAtom(environmentId)),
+      hidingAnywhere: appAtomRegistry.get(environmentThreadShells.anyEnvironmentHidingAtom),
+      now: new Date().toISOString(),
+    });
+    if (older === null) return null;
+    // 読み込み中にページが増えることがあるので、開いた時点と最新の両方の行を合わせる。
+    const loaded = [...new Set([...settledThreadKeys, ...settledThreadKeysRef.current])].flatMap(
+      (threadKey) => parseScopedThreadKey(threadKey) ?? [],
+    );
+    const all = settledShelfTargets({
+      loaded,
+      older,
+      scopes,
+      currentOf: readThreadShell,
+      now: new Date().toISOString(),
+    });
+    const refs = all
+      .filter((thread) => connected.has(thread.environmentId))
+      .map((thread) => scopeThreadRef(thread.environmentId, thread.id));
+    const leftOut =
+      refs.length < all.length ||
+      scopes.some(
+        (scope) => !connected.has(scope.environmentId) && cutOf(scope.environmentId) !== null,
+      );
+    return { refs, leftOut };
+  };
+
+  const runSettledShelfAction = async (action: "archive" | "delete") => {
+    const api = readLocalApi();
+    if (!api) return;
+    const collected = await collectSettledShelfTargets();
+    if (collected === null) {
+      toastManager.add({ type: "error", title: gt("Could not load older threads") });
+      return;
+    }
+    const { refs: targets, leftOut } = collected;
+    const leftOutNote = leftOut
+      ? [gt("Threads on disconnected environments are not included.")]
+      : [];
+    if (targets.length === 0) {
+      for (const title of leftOutNote) toastManager.add({ type: "warning", title });
+      return;
+    }
+    if (!checkThreadOperations(targets)) return;
+    const count = targets.length;
+    // 区分全体に効くので、1 件ずつの確認設定に関係なく必ず確認する。
+    const confirmed = await settlePromise(() =>
+      action === "archive"
+        ? api.dialogs.confirm(
+            [
+              gt(
+                "{count, plural, one {Archive {count} settled thread?} other {Archive {count} settled threads?}}",
+                { count },
+              ),
+              ...leftOutNote,
+            ].join("\n"),
+          )
+        : api.dialogs.confirm(
+            [
+              gt(
+                "{count, plural, one {Delete {count} settled thread?} other {Delete {count} settled threads?}}",
+                { count },
+              ),
+              gt("This permanently clears conversation history for these threads."),
+              gt("Worktrees are not deleted here. Automatic cleanup settings still apply."),
+              ...leftOutNote,
+            ].join("\n"),
+            { variant: "destructive" },
+          ),
+    );
+    if (confirmed._tag === "Failure" || !confirmed.value) return;
+    // 確認中に、ほかの端末で状況が変わることがあるので読み直し、確認した範囲だけを処理する。
+    const latest = await collectSettledShelfTargets();
+    if (latest === null) {
+      toastManager.add({ type: "error", title: gt("Could not load older threads") });
+      return;
+    }
+    const stillThere = new Set(latest.refs.map(scopedThreadKey));
+    const entries = targets.flatMap((ref) => {
+      const threadKey = scopedThreadKey(ref);
+      return stillThere.has(threadKey) ? [{ threadKey, ref }] : [];
+    });
+    const { deletedThreadKeys: doneThreadKeys, firstFailure } = await deleteSelectedThreadEntries({
+      entries,
+      delete: ({ ref }, deletedThreadKeys) =>
+        action === "archive"
+          ? archiveThread(ref, { allowUnloaded: true })
+          : deleteThread(ref, { deletedThreadKeys, keepWorktree: true }),
+    });
+    removeFromSelection([...doneThreadKeys]);
+    if (firstFailure !== null) {
+      const error = squashAtomCommandFailure(firstFailure);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title:
+            action === "archive"
+              ? gt("Failed to archive some threads")
+              : gt("Failed to delete threads"),
+          description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
+        }),
+      );
+    }
+  };
+
+  // 区分に効く設定はここで直接変える。設定画面の項目も残す。
+  const handleShelfMenu = useStableCallback(
+    (
+      shelf: SidebarMarkedSection,
+      position: { x: number; y: number },
+      source: ContextMenuSource,
+    ) => {
+      void (async () => {
+        const api = readLocalApi();
+        if (!api) return;
+        const disabled = settledCount === 0 || settledBulkRunningRef.current;
+        const clicked = await settlePromise(() =>
+          api.contextMenu.show(
+            [
+              ...(shelf === "settled"
+                ? [
+                    {
+                      id: "archive",
+                      label: gt("Archive all…"),
+                      disabled,
+                    },
+                    {
+                      id: "delete",
+                      label: gt("Delete all…"),
+                      destructive: true,
+                      disabled,
+                    },
+                    { id: "auto-settle-settings", label: gt("Auto-settle settings…") },
+                  ]
+                : []),
+              {
+                id: "section-colors",
+                label: sectionColorsEnabled ? gt("Hide section colors") : gt("Show section colors"),
+              },
+              // フォルダ表示には作業中の区分がないので、切り替えを出さない。
+              ...(projectFolders === null
+                ? [
+                    {
+                      id: "working-section",
+                      label: workingShelfSetting
+                        ? gt("Turn off Working section")
+                        : gt("Turn on Working section"),
+                    },
+                  ]
+                : []),
+            ],
+            position,
+            source,
+          ),
+        );
+        if (clicked._tag === "Failure") return;
+        if (clicked.value === "section-colors") {
+          void updateClientSettings({ sidebarSectionColorsEnabled: !sectionColorsEnabled });
+        } else if (clicked.value === "working-section") {
+          void updateClientSettings({ sidebarWorkingShelfEnabled: !workingShelfSetting });
+        } else if (clicked.value === "auto-settle-settings") {
+          // 環境とプロジェクトごとに値が違うので、設定画面を開く。
+          if (isMobile) setOpenMobile(false);
+          void router.navigate({ to: "/settings/threads", hash: "auto-settle-inactive-threads" });
+        } else if (clicked.value === "archive" || clicked.value === "delete") {
+          if (settledBulkRunningRef.current) return;
+          settledBulkRunningRef.current = true;
+          await runSettledShelfAction(clicked.value).finally(() => {
+            settledBulkRunningRef.current = false;
+          });
+        }
+      })();
+    },
+  );
+
   const handleDraftContextMenu = useStableCallback(
     (draftId: DraftId, position: { x: number; y: number }, source: ContextMenuSource) => {
       void (async () => {
@@ -2693,47 +2899,57 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) ?? null;
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
-            buildThreadActionMenuItems({
-              canOperate: readEnvironmentScope(
-                threadRef.environmentId,
-                AuthOrchestrationOperateScope,
-              ),
-              branch: thread.branch ?? null,
-              // An archived project is not a filter choice.
-              projectFilter:
-                threadProjectGroup && !threadProjectGroup.archived
-                  ? {
-                      label: threadProjectGroup.displayName,
-                      isActive: projectScopeKeys.includes(threadProjectGroup.projectKey),
-                    }
-                  : null,
-              isPinned,
-              isSettled,
-              autoSettleEnabled: thread.autoSettleDisabledAt == null,
-              isSnoozed,
-              canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
-              isRegeneratingTitle,
-              isRunning: !threadRuntimeCanArchive(thread.runtime),
-              hasCompletedRun: thread.latestRun?.completedAt != null,
-              canShareWithGuest: appAtomRegistry.get(
-                canShareWithGuestAtom(threadRef.environmentId),
-              ),
-              canTurnIntoProject: canTurnThreadIntoProject(threadRef),
-              canRename: !fromSearch,
-              supports: {
-                settlement: configLoaded,
-                autoSettleOptOut: supportsAutoSettleOptOut,
-                snooze: configLoaded,
-                pinning: configLoaded,
-                titleRegeneration: configLoaded,
-              },
-              snoozePresets,
-            }),
+            [
+              ...buildThreadActionMenuItems({
+                canOperate: readEnvironmentScope(
+                  threadRef.environmentId,
+                  AuthOrchestrationOperateScope,
+                ),
+                branch: thread.branch ?? null,
+                // An archived project is not a filter choice.
+                projectFilter:
+                  threadProjectGroup && !threadProjectGroup.archived
+                    ? {
+                        label: threadProjectGroup.displayName,
+                        isActive: projectScopeKeys.includes(threadProjectGroup.projectKey),
+                      }
+                    : null,
+                isPinned,
+                isSettled,
+                autoSettleEnabled: thread.autoSettleDisabledAt == null,
+                isSnoozed,
+                canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+                isRegeneratingTitle,
+                isRunning: !threadRuntimeCanArchive(thread.runtime),
+                hasCompletedRun: thread.latestRun?.completedAt != null,
+                canShareWithGuest: appAtomRegistry.get(
+                  canShareWithGuestAtom(threadRef.environmentId),
+                ),
+                canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+                canRename: !fromSearch,
+                supports: {
+                  settlement: configLoaded,
+                  autoSettleOptOut: supportsAutoSettleOptOut,
+                  snooze: configLoaded,
+                  pinning: configLoaded,
+                  titleRegeneration: configLoaded,
+                },
+                snoozePresets,
+              }),
+              // 区分をオフにすると見出しが消えるので、いつもある行にも戻す入口を置く。
+              ...(!workingShelfSetting && projectFolders === null
+                ? [{ id: "show-working-section" as const, label: gt("Show Working section") }]
+                : []),
+            ],
             position,
             source,
           ),
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
+        if (clicked.value === "show-working-section") {
+          void updateClientSettings({ sidebarWorkingShelfEnabled: true });
+          return;
+        }
         if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
@@ -3518,6 +3734,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 ? `shelf:${section}`
                                 : undefined)
                             }
+                            sectionMark={
+                              sectionColorsEnabled &&
+                              (section === "working" ||
+                                section === "snoozed" ||
+                                section === "settled")
+                                ? section
+                                : undefined
+                            }
                             variantAction={
                               section === "snoozed"
                                 ? "unsnooze"
@@ -3692,6 +3916,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="working-shelf-header"
                                 marker="working-header"
+                                menu={{
+                                  label: gt("Working section options"),
+                                  onOpen: (position, source) =>
+                                    handleShelfMenu("working", position, source),
+                                }}
                                 className="mt-auto"
                                 label={gt("Working", { $context: "sidebar section" })}
                                 count={workingThreads.length}
@@ -3707,6 +3936,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="snoozed-shelf-header"
                                 marker="snoozed-header"
+                                menu={{
+                                  label: gt("Snoozed section options"),
+                                  onOpen: (position, source) =>
+                                    handleShelfMenu("snoozed", position, source),
+                                }}
                                 className={cn(workingThreads.length === 0 && "mt-auto")}
                                 label={gt("Snoozed", { $context: "sidebar section" })}
                                 count={snoozedThreads.length}
@@ -3732,6 +3966,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 toggle={{
                                   expanded: settledShelfExpanded,
                                   onToggle: toggleSettledShelf,
+                                }}
+                                menu={{
+                                  label: gt("Settled section options"),
+                                  onOpen: (position, source) =>
+                                    handleShelfMenu("settled", position, source),
                                 }}
                               />,
                             );

@@ -90,6 +90,7 @@ import {
   type ThreadListV2ListItem,
 } from "../threads/threadListV2";
 import { useThreadListV2ShelfPreferences } from "../threads/use-thread-list-v2-shelf-preferences";
+import { useSettledShelfBulkActions } from "./useSettledShelfBulkActions";
 import type { HomeListFilterMenuEnvironment } from "./home-list-filter-menu";
 import {
   buildHomeProjectScopes,
@@ -393,6 +394,8 @@ export function HomeScreen(props: HomeScreenProps) {
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
+    sectionColorsEnabled,
+    showWorkingSection,
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
@@ -418,6 +421,7 @@ export function HomeScreen(props: HomeScreenProps) {
     items: threadListV2Items,
     contentOnlyThreadKeys,
     olderSettledShelf,
+    settledScopes,
   } = useThreadListV2({
     threads: props.threads,
     pendingTasks: props.pendingTasks,
@@ -439,6 +443,10 @@ export function HomeScreen(props: HomeScreenProps) {
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey,
+  });
+  const settledBulkActions = useSettledShelfBulkActions({
+    threads: threadListV2Layout.settledThreads,
+    scopes: settledScopes,
   });
   // Called as `props.onSelectThread(...)`, the compiler would cache this handler on the whole
   // props object, which is new on every render of Home's parent.
@@ -524,6 +532,8 @@ export function HomeScreen(props: HomeScreenProps) {
           disabled={item.disabled}
           expanded={item.expanded}
           onToggle={toggleSettledShelf}
+          onArchiveAll={settledBulkActions.archiveAll}
+          onDeleteAll={settledBulkActions.deleteAll}
         />
       );
     }
@@ -536,6 +546,7 @@ export function HomeScreen(props: HomeScreenProps) {
         onNewThreadOnBranch={props.onNewThreadOnBranch}
         thread={thread}
         variant={item.item.variant}
+        sectionMark={sectionColorsEnabled ? item.sectionMark : undefined}
         hasQueuedMessages={item.hasQueuedMessages}
         snoozed={item.item.snoozed}
         pinned={item.item.pinned}
@@ -590,6 +601,7 @@ export function HomeScreen(props: HomeScreenProps) {
         onPinThread={handlePinThread}
         onUnpinThread={handleUnpinThread}
         onSetThreadAutoSettle={handleSetThreadAutoSettle}
+        onShowWorkingSection={workingShelfEnabled ? undefined : showWorkingSection}
         onMoveThread={handleMoveThread}
         onSwipeableClose={handleSwipeableClose}
         onSwipeableWillOpen={handleSwipeableWillOpen}
@@ -611,6 +623,7 @@ export function HomeScreen(props: HomeScreenProps) {
     selectedThreadKey,
     threadSearchMatchByKey,
     workingShelfEnabled,
+    sectionColorsEnabled,
   };
 
   const hasAnyThreads =

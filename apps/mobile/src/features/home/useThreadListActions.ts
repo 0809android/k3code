@@ -78,7 +78,7 @@ function selectionHaptic(): void {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 }
 
-function actionFailureTitle(action: ThreadListAction): string {
+export function actionFailureTitle(action: ThreadListAction): string {
   if (action === "archive") return m(msg("Could not archive thread"));
   if (action === "unarchive") return m(msg("Could not unarchive thread"));
   if (action === "settle") return m(msg("Could not settle thread"));
@@ -86,7 +86,10 @@ function actionFailureTitle(action: ThreadListAction): string {
   return m(msg("Could not delete thread"));
 }
 
-function checkThreadOperationPermission(thread: EnvironmentThreadShell, title: string): boolean {
+export function checkThreadOperationPermission(
+  thread: EnvironmentThreadShell,
+  title: string,
+): boolean {
   if (readEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope)) return true;
   Dialog.alert(title, m(msg("This connection cannot change threads.")));
   return false;
@@ -105,7 +108,7 @@ function liveThread(thread: EnvironmentThreadShell): EnvironmentThreadShell {
   );
 }
 
-function useThreadActionExecutor(
+export function useThreadActionExecutor(
   onCompleted?: (action: ThreadListAction, thread: EnvironmentThreadShell) => void,
 ) {
   const archiveMutation = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
@@ -120,7 +123,13 @@ function useThreadActionExecutor(
     thread: EnvironmentThreadShell,
     onStarted?: () => void,
     restoreUnsettledAt?: string | null,
+    // 一括操作は、失敗を最後にまとめて知らせる。
+    quiet = false,
   ) => {
+    // 一括操作の途中で権限がなくなっても、1 件ずつは知らせない。
+    if (quiet && !readEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope)) {
+      return false;
+    }
     if (!checkThreadOperationPermission(thread, actionFailureTitle(action))) return false;
     const key = scopedThreadKey(thread.environmentId, thread.id);
     // Drop only a repeat of the latest pending action; Settle → Un-settle → Settle must all send.
@@ -130,7 +139,7 @@ function useThreadActionExecutor(
 
     const pending = { action };
     latestPendingActions.current.set(key, pending);
-    selectionHaptic();
+    if (!quiet) selectionHaptic();
     const succeeded = await (async () => {
       if (
         (action === "settle" || action === "unsettle") &&
@@ -147,6 +156,7 @@ function useThreadActionExecutor(
         return false;
       }
       if (action === "archive" && !threadCanArchive(thread.runtime)) {
+        if (quiet) return false;
         Dialog.alert(
           actionFailureTitle(action),
           m(msg("This thread is working. Interrupt it first, then try again.")),
@@ -184,7 +194,9 @@ function useThreadActionExecutor(
         (result) => result._tag === "Success",
       );
       if (result._tag === "Failure") {
-        Dialog.alert(actionFailureTitle(action), actionFailureMessage(action, result.cause));
+        if (!quiet) {
+          Dialog.alert(actionFailureTitle(action), actionFailureMessage(action, result.cause));
+        }
         return false;
       }
       if (action === "archive" || action === "delete") {

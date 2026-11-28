@@ -244,7 +244,7 @@ export function useThreadListV2(input: {
       input.shelfPreferencesLoaded,
     ],
   );
-  return { layout, items, contentOnlyThreadKeys, olderSettledShelf };
+  return { layout, items, contentOnlyThreadKeys, olderSettledShelf, settledScopes: scopes };
 }
 
 /** The list's scope per environment: its projects there, or every project. */

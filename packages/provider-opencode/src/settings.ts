@@ -50,6 +50,16 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    // キーは設定に保存せず、秘密の環境変数にだけ置く。
+    apiService: Schema.optionalKey(
+      Schema.Struct({
+        id: TrimmedString,
+        name: TrimmedString,
+        baseUrl: TrimmedString,
+        /** 増やすとインスタンスが作り直され、モデル一覧を読み直す。 */
+        modelsRevision: Schema.optionalKey(Schema.Number),
+      }),
+    ).pipe(Schema.annotateKey({ providerSettingsForm: { hidden: true } })),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),

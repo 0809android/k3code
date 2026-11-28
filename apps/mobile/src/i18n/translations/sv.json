@@ -5781,5 +5781,18 @@
   "8d37e1dd4408a2fe": "Inte rensat ännu. Det första passet körs några minuter efter att rensningen slagits på, eller efter serverstarten om den redan är på.",
   "18bb2dd8209b1919": "Senast rensat: {last}. Nästa körning är försenad.",
   "e2f5de1dcb452026": "Senast rensat: {last}. Nästa körning: {next}.",
-  "a3f33b0f3d5430d9": "Att ändra rensningen av trådhistoriken kräver underhållsåtkomst till den här miljön."
+  "a3f33b0f3d5430d9": "Att ändra rensningen av trådhistoriken kräver underhållsåtkomst till den här miljön.",
+  "227f577eb246983a": "Det gick inte att läsa in äldre trådar",
+  "9322c2401e23b624": "{count, plural, one {{count} tråd misslyckades.} other {{count} trådar misslyckades.}}",
+  "979f462b839c6844": "Trådar i frånkopplade miljöer ingår inte.",
+  "5ae02c83ba99f9db": "{count, plural, one {Arkivera {count} avklarad tråd?} other {Arkivera {count} avklarade trådar?}}",
+  "a5bf575fed3877db": "{count, plural, one {Ta bort {count} avklarad tråd?} other {Ta bort {count} avklarade trådar?}}",
+  "b09acd1f355dcfc4": "Arkiverade trådar kan återställas från Inställningar.",
+  "a1e95451f9afe978": "Det här rensar konversationshistoriken för de här trådarna permanent.",
+  "977183cf668edaa2": "avsnittsfärger",
+  "d524901b60c8e30d": "Avsnittsfärger",
+  "c1fd1a57d91464cf": "Arkivera alla…",
+  "84ef37a4933bb484": "Ta bort alla…",
+  "0eb0e3e0af2fae6b": "Inställningar för automatisk avklarning…",
+  "73bbf83b3a9088c5": "Visa avsnittet Pågående"
 }

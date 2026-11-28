@@ -4,9 +4,11 @@ import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
   type EnvironmentId,
-  type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
   MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
+  AuthProvidersManageScope,
+  ProviderDriverKind,
+  isManagedDriverAllowed,
 } from "@t3tools/contracts";
 import { resolveSelectableModel } from "@t3tools/shared/model";
 import { useAtomValue } from "@effect/atom-react";
@@ -50,7 +52,7 @@ import {
 import { ModelEsque } from "./providerIconUtils";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { registerModelPickerContent } from "../../modelPickerVisibility";
-import { primaryServerKeybindingsAtom } from "../../state/server";
+import { primaryServerKeybindingsAtom, serverEnvironment } from "../../state/server";
 import {
   modelPickerJumpCommandForIndex,
   modelPickerJumpIndexFromCommand,
@@ -65,6 +67,9 @@ import { announce } from "~/lib/announce";
 import { cn } from "~/lib/utils";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import { TooltipProvider } from "../ui/tooltip";
+import { apiServiceDialogRequest } from "../settings/apiServices";
+import { useManagedPolicy } from "../../state/managedPolicy";
+import { useEnvironmentScope } from "../../state/session";
 import { InlineButton } from "../ui/button";
 import { Badge } from "../ui/badge";
 import {
@@ -201,6 +206,43 @@ function modelJumpLabelsByKey(
     }
   }
   return mapping.size > 0 ? mapping : EMPTY_MODEL_JUMP_LABELS;
+}
+
+/** 追加できる接続でだけ出し、このモデル選択欄の端末に追加する。 */
+function AddApiServiceLink({
+  environmentId,
+  onRequestClose,
+}: {
+  environmentId: EnvironmentId;
+  onRequestClose: (() => void) | undefined;
+}) {
+  const navigate = useNavigate();
+  const canManage = useEnvironmentScope(environmentId, AuthProvidersManageScope);
+  const managedPolicy = useManagedPolicy(environmentId);
+  const supported = useAtomValue(
+    serverEnvironment.configValueAtom(environmentId),
+    (config) => config?.environment.capabilities.apiServices === true,
+  );
+  if (
+    !supported ||
+    !canManage ||
+    !isManagedDriverAllowed(managedPolicy, ProviderDriverKind.make("opencode"))
+  ) {
+    return null;
+  }
+  return (
+    <p className="shrink-0 border-t border-border/70 px-3 py-2 text-xs">
+      <InlineButton
+        onClick={() => {
+          apiServiceDialogRequest.open(environmentId);
+          onRequestClose?.();
+          void navigate({ to: "/settings/providers", search: { environmentId } });
+        }}
+      >
+        <T>Add an API service</T>
+      </InlineButton>
+    </p>
+  );
 }
 
 function ModelPickerProviderNotices({
@@ -1252,6 +1294,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               onRequestClose={onRequestClose}
               onOpenProviderSetup={onOpenProviderSetup}
             />
+            {props.environmentId === null ? null : (
+              <AddApiServiceLink
+                environmentId={props.environmentId}
+                onRequestClose={props.onRequestClose}
+              />
+            )}
             {props.listFooter}
           </div>
         </Combobox>

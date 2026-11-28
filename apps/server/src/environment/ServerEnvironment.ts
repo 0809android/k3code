@@ -315,6 +315,7 @@ export const make = Effect.gen(function* () {
       ...(hostedApproval ? { mcpHostedApproval: true } : {}),
       shellThreadFamilies: true,
       shellOlderSettled: true,
+      apiServices: true,
       // Reports are never sent anywhere, so the setting is not offered.
       agentFeedback: false,
     },

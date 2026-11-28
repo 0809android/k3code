@@ -179,6 +179,7 @@ export interface Preferences {
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
   readonly toolCallVisibility?: ToolCallVisibility;
   readonly workingShelfEnabled?: boolean;
+  readonly sectionColorsEnabled?: boolean;
   readonly useLastProjectForNewThreads?: boolean;
   readonly defaultThreadEnvironmentId?: EnvironmentId | null;
   readonly lastThreadProject?: typeof ThreadProject.Type;
@@ -270,6 +271,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     projectGroupingMode?: SidebarProjectGroupingMode;
     toolCallVisibility?: ToolCallVisibility;
     workingShelfEnabled?: boolean;
+    sectionColorsEnabled?: boolean;
     useLastProjectForNewThreads?: boolean;
     defaultThreadEnvironmentId?: EnvironmentId | null;
     lastThreadProject?: typeof ThreadProject.Type;
@@ -405,6 +407,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.workingShelfEnabled === "boolean") {
     preferences.workingShelfEnabled = parsed.workingShelfEnabled;
+  }
+  if (typeof parsed.sectionColorsEnabled === "boolean") {
+    preferences.sectionColorsEnabled = parsed.sectionColorsEnabled;
   }
   if (typeof parsed.useLastProjectForNewThreads === "boolean") {
     preferences.useLastProjectForNewThreads = parsed.useLastProjectForNewThreads;

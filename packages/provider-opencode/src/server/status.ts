@@ -753,6 +753,11 @@ export function openCode2ProviderModels(
   );
 }
 
+const apiServiceFailureDetail = (error: unknown): string | undefined =>
+  OpenCodeRuntime.isOpenCodeRuntimeError(error) && error.operation.startsWith("apiService.")
+    ? error.detail
+    : undefined;
+
 const checkOpenCode2 = Effect.fn("checkOpenCode2")(function* (
   settings: OpenCodeSettings,
   version: string,
@@ -784,7 +789,11 @@ const checkOpenCode2 = Effect.fn("checkOpenCode2")(function* (
         DEFAULT_OPENCODE_MODEL_CAPABILITIES,
       ),
       slashCommands: [COMPACT_SLASH_COMMAND],
-      probe: probe("error", "OpenCode could not load its model list."),
+      probe: probe(
+        "error",
+        apiServiceFailureDetail(Cause.squash(result.cause)) ??
+          "OpenCode could not load its model list.",
+      ),
     });
   }
   if (result.value.length === 0) {

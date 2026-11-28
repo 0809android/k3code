@@ -91,3 +91,17 @@ opens there.
 
 Existing threads keep their selected model and options even when it disappears
 from the catalog. If OpenCode rejects that model, select an available one and retry.
+
+## API キーで使うサービス
+
+OpenDesign、Mistral、キノコードなどの API サービスは、**設定 → プロバイダー**の**API サービスを追加**
+から、サービスを選んでキーを貼るだけで使えます。モデル選択欄の下からも開けます。一覧にない OpenAI
+互換のサービスは、接続先の URL を入力して追加します。OpenCode 2 が必要です。
+
+- モデルは裏で OpenCode が動かします。手元の OpenCode の設定ファイルは書き換えません。
+- キーは K3 Code のサーバーに保存し、表示した接続先にだけ送ります。接続先は登録後に変わりません。
+  OpenCode や、エージェントが実行するコマンドには渡しません。
+- モデル一覧はサービスから読みます。新しいモデルが出たら、設定のカードの**モデル一覧を更新**を押して
+  ください。一覧を返さないサービスは、モデル名を手で追加します。
+- 同じモデルの別名は 1 つにまとめて表示します。ほかの名前を使いたいときは、手で追加します。
+- どのサービスでもエージェントが正しく動くとは限りません。ツールを呼び出せないモデルもあります。
